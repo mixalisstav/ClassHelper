@@ -3,6 +3,7 @@ from dotenv import load_dotenv
 from langchain_google_genai import ChatGoogleGenerativeAI
 from langchain.prompts import ChatPromptTemplate, HumanMessagePromptTemplate, SystemMessagePromptTemplate
 from dotenv import load_dotenv  
+from vector import get_retriever
 load_dotenv()
 
 
@@ -15,14 +16,16 @@ llm = ChatGoogleGenerativeAI(
 )
 prompt = """
 Μπορεις να απαντησεις στα ελληνικα.
-Σαν προτη γλωσσα επιλεξε τα οτι γλωσσα επιλαξει ο χρηστης.
+Σαν προτη γλωσσα επιλεξε τα οτι γλωσσα μιληση πρωτα ο χρηστης.
 
 You are a tutor bot that helps students learn The subject of Artificial Intelligence.
 Provide clear and concise explanations, examples, and answer any questions they may have about AI concepts, techniques, and applications.
 Focus on making complex topics understandable and engaging for learners of all levels.
 
-You will answer the questions only from the vector database provided. If the answer is not contained within the context, respond with "I don't know."
+if the question is not in the vector database, respond with "I'm sorry, I don't have the information on that topic."
 
+Here is the vector database retriever that contains relevant information about AI:
+{retriever_code}
 
 Please answer the following question:{question}
 
@@ -32,26 +35,10 @@ Answer:
 
 
 """
-c_prompt = ChatPromptTemplate.from_messages([
-    SystemMessagePromptTemplate.from_template(
-        "You are a tutor bot that helps students learn The subject of Artificial Intelligence. "
-        "Provide clear and concise explanations, examples, and answer any questions they may have about AI concepts, techniques, and applications. "
-        "Focus on making complex topics understandable and engaging for learners of all levels."
-    ),
-    HumanMessagePromptTemplate.from_template(
-        "You will answer the questions only from the vector database provided. If the answer is not contained within the context, respond with 'I don't know.'\n\n"
-        "Please answer the following question:{question}\n\n"
-        "Here is the history of the conversation so far:{chat_history}\n\n"
-        "Answer:"
-    ),
-])
-
-
-
-
-
 def generate_tutor_response(question, chat_history):
-    formatted_prompt = prompt.format(question=question, chat_history=chat_history)
+    retriever = get_retriever(search_k=question)
+    retriever_code = f"retriever = {retriever}"
+    formatted_prompt = prompt.format(retriever_code=retriever_code,question=question, chat_history=chat_history)
     print("Things are working up to here")
     response = llm.invoke(formatted_prompt)
     return response.content

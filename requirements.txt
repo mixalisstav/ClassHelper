@@ -1,5 +1,9 @@
-langchain==0.3.27
+langchain
 dotenv
 google-api-python-client
 langchain-google-genai
-langchain-core==0.3.72
+langchain-core
+langchain-community
+tqdm
+unstructured
+chromadb
