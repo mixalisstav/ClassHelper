@@ -18,26 +18,34 @@ llm = ChatGoogleGenerativeAI(
     temperature=0.2,
 )
 TEMPLATE = """
-Μπορεις να απαντησεις στα ελληνικα.
-Σαν προτη γλωσσα επιλεξε τα οτι γλωσσα μιληση πρωτα ο χρηστης.
+Μπορείς να απαντάς στα ελληνικά.
+Ως κύρια γλώσσα απάντησης να επιλέγεις πάντα αυτήν που χρησιμοποίησε πρώτα ο χρήστης.
 
-You are a tutor agent that helps students learn The class of Ποιοτητα λογισμικου(Software Quality) in a Uom.
-Provide clear and concise explanations, examples, and answer any questions.
-Focus on making complex topics understandable and engaging for learners of all levels.
+You are a tutor agent that helps students learn the course 
+"Ποιότητα Λογισμικού (Software Quality)" at the University of Macedonia (UoM).
 
-with your tools you can (only from the vector database: 
-- Retrieve relevant information from a knowledge base about Ποιοτητα λογισμικου(Software Quality) using the "vector_db" tool.
-- Provide examples and explanations of AI concepts.
+Your goals:
+- Provide clear and concise explanations.
+- Use examples, analogies, and step-by-step reasoning.
+- Make complex topics simple and engaging for students of all levels.
 
-At the end of the session:
-- Summarize the key points discussed,and using the tool ="cloud", up load to the cloud the most asked questions.
+Tool usage rules:
+- You may retrieve information ONLY from the vector database using the tool "vector_db".
+- Use the retrieved information to answer questions related to Software Quality.
+- You may also generate explanations and examples based on general AI knowledge.
+
+End of session:
+- Summarize the key points discussed.
+- Upload the most frequently asked questions to the cloud using the tool "cloud".
 """
+
 prompt = ChatPromptTemplate.from_messages([
-    ("system",TEMPLATE),
+    ("system", TEMPLATE),
     MessagesPlaceholder(variable_name="chat_history"),
-    ("human","{question}"),
-    MessagesPlaceholder("agent_scratchpad"),
+    ("human", "{question}"),
+    MessagesPlaceholder(variable_name="agent_scratchpad"),
 ])
+
 tools = [upload_to_cloud, retrieve_from_vector_db]
 agent = create_openai_tools_agent(
     llm=llm,
@@ -59,41 +67,9 @@ def generate_tutor_response(question, chat_history):
             "chat_history": chat_history,
             }
         )
-    final = find(question,response['output'])
-    return final
-
-
-TEMPLATE2 = "You will extract the important information from the following documents to answer the question."
-def find(question,lista):
-    llm2 = ChatGoogleGenerativeAI(
-        api_key=api_key,
-        model="gemini-2.5-flash",
-        temperature=0.2,
-    )
-    agent2 = create_openai_tools_agent(
-        llm=llm2,
-        tools=[],
-        prompt=ChatPromptTemplate.from_messages([
-            ("system",TEMPLATE2),
-            ("human","{question}"),
-            ("human","{lista}"),
-            MessagesPlaceholder("agent_scratchpad"),
-        ])
-        )
-    agent_executor2 = AgentExecutor.from_agent_and_tools(
-        agent=agent2,
-        tools=[],
-        verbose=True,
-    )
-    information = agent_executor2.invoke(
-        input={
-            "question": question,
-            "lista": lista,
-           }
-    )
     
-    
-    return information
+    return response['output']
+
 
 
 def chat():
@@ -109,6 +85,20 @@ def chat():
         print(f"Tutor Bot: {response}")
         chat_history.append(HumanMessage(content=question))
         chat_history.append(AIMessage(content=response))
+        
+        # check frquency of questions in chat_history
+        question_count = {}
+        for message in chat_history:
+            if isinstance(message, HumanMessage):
+                if message.content in question_count:
+                    question_count[message.content] += 1
+                else:
+                    question_count[message.content] = 1
+        # Print the most frequently asked questions
+        sorted_questions = sorted(question_count.items(), key=lambda x: x[1], reverse=True)
+        print("Most frequently asked questions so far:")
+        for question, count in sorted_questions[:5]:
+            print(f"'{question}' asked {count} times")  
 
 if __name__ == "__main__":
     chat()

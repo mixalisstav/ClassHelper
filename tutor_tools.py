@@ -9,11 +9,20 @@ def upload_to_cloud(data: str) -> str:
     print(data)
     return "Data uploaded to the cloud successfully."
 
-@tool("vector_db", return_direct=True)
+@tool("vector_db")
 def retrieve_from_vector_db(query: str) -> str:
     """Retrieve relevant documents from the vector database based on the query."""
     retriever = get_retriever()
     results = retriever.get_relevant_documents(query)
-    # combined_results = "\n".join([doc.page_content for doc in results])
-    print(type(results))
-    return results
+
+    if not results:
+        return "No relevant documents found."
+
+    combined_results = "\n\n".join(
+        [
+            f"Document {i+1}:\n{doc.page_content}"
+            for i, doc in enumerate(results)
+        ]
+    )
+    return combined_results
+
