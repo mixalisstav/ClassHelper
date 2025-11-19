@@ -7,7 +7,7 @@ from langchain.schema import HumanMessage, AIMessage, SystemMessage
 from langchain.prompts import ChatPromptTemplate, HumanMessagePromptTemplate, SystemMessagePromptTemplate,MessagesPlaceholder
 from dotenv import load_dotenv
 
-from tutor_tools import upload_to_cloud, retrieve_from_vector_db
+from tutor_tools import upload_to_cloud, retrieve_from_vector_db, get_most_frequent_questions
 from langchain_google_genai import ChatGoogleGenerativeAI
 load_dotenv()
 api_key = os.getenv("GEMINI_API_KEY")
@@ -46,7 +46,7 @@ prompt = ChatPromptTemplate.from_messages([
     MessagesPlaceholder(variable_name="agent_scratchpad"),
 ])
 
-tools = [upload_to_cloud, retrieve_from_vector_db]
+tools = [upload_to_cloud, retrieve_from_vector_db,get_most_frequent_questions]
 agent = create_openai_tools_agent(
     llm=llm,
     tools=tools,
@@ -86,19 +86,7 @@ def chat():
         chat_history.append(HumanMessage(content=question))
         chat_history.append(AIMessage(content=response))
         
-        # check frquency of questions in chat_history
-        question_count = {}
-        for message in chat_history:
-            if isinstance(message, HumanMessage):
-                if message.content in question_count:
-                    question_count[message.content] += 1
-                else:
-                    question_count[message.content] = 1
-        # Print the most frequently asked questions
-        sorted_questions = sorted(question_count.items(), key=lambda x: x[1], reverse=True)
-        print("Most frequently asked questions so far:")
-        for question, count in sorted_questions[:5]:
-            print(f"'{question}' asked {count} times")  
+        
 
 if __name__ == "__main__":
     chat()
