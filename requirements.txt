@@ -7,3 +7,4 @@ langchain-community
 tqdm
 unstructured
 chromadb
+pandas

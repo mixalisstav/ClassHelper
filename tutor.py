@@ -14,7 +14,7 @@ api_key = os.getenv("GEMINI_API_KEY")
 
 llm = ChatGoogleGenerativeAI(
     api_key=api_key,
-    model="gemini-2.5-pro",
+    model="gemini-2.5-flash",
     temperature=0.2,
 )
 TEMPLATE = """
@@ -36,7 +36,7 @@ Tool usage rules:
 
 End of session:
 - Summarize the key points discussed.
-- Upload the most frequently asked questions to the cloud using the tool "cloud".
+- Upload the summarization to the cloud using the tool "cloud".
 """
 
 prompt = ChatPromptTemplate.from_messages([
@@ -72,21 +72,61 @@ def generate_tutor_response(question, chat_history):
 
 
 
-def chat():
+def chat(name,id):
+    import sqlite3 as sql
+    conn = sql.connect('classroom.db')
+    c = conn.cursor()
+    c.execute('''SELECT questions FROM students WHERE name=?''', (name,))
+    result = c.fetchone()
+    if result is None:
+        c.execute('''INSERT INTO students (name, questions) VALUES (?, ?)''', (name, ''))
+    conn.commit()
+    c.close()
+    conn.close()
     chat_history = []
-    print("Welcome to the AI Tutor Bot! Type 'exit' to end the session.")
+    chat_history.append(HumanMessage(content=f"Το ονομα μου ειναι {name}\nΟ αριθμος μητρου μου ειναι: {id}\nΠροηγουμενες ερωτησεις μου ειναι: {result[0]}"))
+    chat_history.append(AIMessage(content=""))
+    
+    print(f"Welcome {name} to the AI Tutor Bot! Type 'exit' to end the session.")
     while True:
         question = input("You: ")
-        if question.lower() == 'q':
+        if question.lower() in ['q','exit','quit','Τελος','τέλος','σταμάτα','τελος']:
             print("Ending the session. Goodbye!")
-            agent_executor.invoke(input={"question": "Upload the most asked questions to the cloud.", "chat_history": chat_history})
+            agent_executor.invoke(input={"question": "Τελος", "chat_history": chat_history})
             break
         response = str(generate_tutor_response(question, chat_history))
         print(f"Tutor Bot: {response}")
         chat_history.append(HumanMessage(content=question))
         chat_history.append(AIMessage(content=response))
-        
-        
 
+ 
+
+ 
+ 
+def get_user_credentials():
+    import pandas as pd
+    name = input("Enter your name: ")
+    password= input("Enter your password: ")
+    users_df = pd.read_csv('users.csv')
+    users = users_df.values.tolist()
+    authenticated = False
+    for user in users:
+        user_name, user_password, id = user
+        if name == user_name and password == user_password:
+            authenticated = True
+            break
+    if authenticated:
+        return True,name,id
+    else:
+        return False,"noname","noid"
+        
 if __name__ == "__main__":
-    chat()
+    trig,name,id= get_user_credentials()
+    
+    if trig: 
+        chat(name=name,id=id)
+    else:
+        print("Authentication failed. Exiting the program.")    
+    
+    
+    
