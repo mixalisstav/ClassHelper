@@ -8,3 +8,4 @@ tqdm
 unstructured
 chromadb
 pandas
+FreeSimpleGUI
