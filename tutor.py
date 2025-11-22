@@ -6,10 +6,10 @@ from langchain.agents import create_openai_tools_agent,AgentExecutor,tool
 from langchain.schema import HumanMessage, AIMessage, SystemMessage
 from langchain.prompts import ChatPromptTemplate, HumanMessagePromptTemplate, SystemMessagePromptTemplate,MessagesPlaceholder
 from dotenv import load_dotenv
-
+import sys
 from tutor_tools import upload_to_cloud, retrieve_from_vector_db, get_most_frequent_questions
 from langchain_google_genai import ChatGoogleGenerativeAI
-load_dotenv()
+load_dotenv(os.path.join(os.path.dirname(sys.executable), '.env'))
 api_key = os.getenv("GEMINI_API_KEY")
 
 llm = ChatGoogleGenerativeAI(
@@ -97,7 +97,9 @@ def chat_temp(name,id):
 
 def chat(name,id):
     import sqlite3 as sql
-    conn = sql.connect('classroom.db')
+    # ΝΕΟ: Η βάση δεδομένων θα αποθηκεύεται στον φάκελο του χρήστη ή δίπλα στο App
+    db_path = os.path.join(os.path.expanduser("~"), "classroom.db") 
+    conn = sql.connect(db_path)
     c = conn.cursor()
     c.execute('''SELECT questions FROM students WHERE name=?''', (name,))
     result = c.fetchone()
@@ -125,14 +127,16 @@ def chat(name,id):
         
 
  
-
+from interface import resource_path
  
  
 def get_user_credentials():
     import pandas as pd
     name = input("Enter your name: ")
     password= input("Enter your password: ")
-    users_df = pd.read_csv('users.csv')
+    # ΠΑΛΙΟ: users_df = pd.read_csv('users.csv')
+    # ΝΕΟ:
+    users_df = pd.read_csv(resource_path('users.csv'))
     users = users_df.values.tolist()
     authenticated = False
     for user in users:

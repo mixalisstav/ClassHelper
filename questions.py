@@ -2,9 +2,9 @@ import os
 import sqlite3 as sql
 import json
 from dotenv import load_dotenv
-
+import sys
 # Φορτώνει το API KEY
-load_dotenv()
+load_dotenv(os.path.join(os.path.dirname(sys.executable), '.env'))
 API_KEY = os.getenv("GEMINI_API_KEY")
 
 from tutor import get_user_credentials # Υποθέτουμε ότι υπάρχει αυτό το αρχείο

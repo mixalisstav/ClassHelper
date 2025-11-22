@@ -1,14 +1,16 @@
 from langchain.agents import tool
 from vector import get_retriever
 from langchain.schema import HumanMessage
+import os
 
 @tool("cloud", return_direct=True)
 def upload_to_cloud(summarization,name,id):
     """Here you can upload the summarization to the cloud.Using the database classroom.db and you will need the student's name."""
     try:
         import sqlite3 as sql
-
-        conn = sql.connect('classroom.db')
+        # ΝΕΟ: Η βάση δεδομένων θα αποθηκεύεται στον φάκελο του χρήστη ή δίπλα στο App
+        db_path = os.path.join(os.path.expanduser("~"), "classroom.db") 
+        conn = sql.connect(db_path)     
         c = conn.cursor()
         
         student_name = name
