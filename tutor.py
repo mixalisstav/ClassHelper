@@ -58,6 +58,14 @@ agent_executor = AgentExecutor.from_agent_and_tools(
     verbose=True,
 )
 
+def create_agent_executor():
+    agent_executor = AgentExecutor.from_agent_and_tools(
+    agent=agent,
+    tools=tools,
+    verbose=True,
+)
+    return agent_executor
+
 def generate_tutor_response(question, chat_history):
     
     print("Things are working up to here")
@@ -70,7 +78,22 @@ def generate_tutor_response(question, chat_history):
     
     return response['output']
 
-
+def chat_temp(name,id):
+    chat_history = []
+    chat_history.append(HumanMessage(content=f"Το ονομα μου ειναι {name}\nΟ αριθμος μητρου μου ειναι: {id}"))
+    chat_history.append(AIMessage(content=""))
+    
+    print(f"Welcome {name} to the AI Tutor Bot! Type 'exit' to end the session.")
+    while True:
+        question = input("You: ")
+        if question.lower() in ['q','exit','quit','Τελος','τέλος','σταμάτα','τελος']:
+            print("Ending the session. Goodbye!")
+            agent_executor.invoke(input={"question": "Τελος", "chat_history": chat_history})
+            break
+        response = str(generate_tutor_response(question, chat_history))
+        print(f"Tutor Bot: {response}")
+        chat_history.append(HumanMessage(content=question))
+        chat_history.append(AIMessage(content=response))
 
 def chat(name,id):
     import sqlite3 as sql
@@ -95,9 +118,11 @@ def chat(name,id):
             agent_executor.invoke(input={"question": "Τελος", "chat_history": chat_history})
             break
         response = str(generate_tutor_response(question, chat_history))
-        print(f"Tutor Bot: {response}")
+        # print(f"Tutor Bot: {response}")
         chat_history.append(HumanMessage(content=question))
         chat_history.append(AIMessage(content=response))
+    
+        
 
  
 

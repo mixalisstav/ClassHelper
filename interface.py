@@ -3,313 +3,235 @@ import pandas as pd
 import sqlite3 as sql
 import os
 from dotenv import load_dotenv
-
-# Φορτώνει μεταβλητές περιβάλλοντος (π.χ. GEMINI_API_KEY)
 load_dotenv()
+   
 
-# --- 1. Λειτουργίες Πιστοποίησης & Βοηθητικές ---
+# --- Εισαγωγή Εξωτερικών Modules ---
+try:
+    from questions import main as generate_quiz
+except ImportError:
+    generate_quiz = None
+    print("Προσοχή: Το αρχείο 'questions.py' δεν βρέθηκε.")
 
-# Αυτή η συνάρτηση προέρχεται από τη λογική του tutor/quiz agent 
-# και ελέγχει τα διαπιστευτήρια του χρήστη.
-def authenticate_user(name, password):
-    """Ελέγχει τα διαπιστευτήρια του χρήστη έναντι του users.csv."""
-    try:
-        users_df = pd.read_csv('users.csv')
-        
-        # Εξασφάλιση ότι οι στήλες υπάρχουν
-        if 'user_name' not in users_df.columns or 'user_password' not in users_df.columns or 'id' not in users_df.columns:
-            sg.popup_error("Σφάλμα:", "Το αρχείο users.csv πρέπει να περιέχει τις στήλες 'name', 'password' και 'id'.")
-            return False, None, None
+# --- AI SETUP (Για το Tutor Chat) ---
+from langchain_google_genai import ChatGoogleGenerativeAI
+from langchain.prompts import ChatPromptTemplate
 
-        # Αναζήτηση χρήστη
-        match = users_df[(users_df['user_name'] == name) & (users_df['user_password'] == password)]
-        
-        if not match.empty:
-            user_id = str(match['id'].iloc[0])
-            # Εγγύηση ότι ο χρήστης υπάρχει στη βάση 'students' για μελλοντική χρήση
-            ensure_student_in_db(name, user_id)
-            return True, name, user_id
-        else:
-            return False, None, None
-            
-    except FileNotFoundError:
-        sg.popup_error("Σφάλμα:", "Το αρχείο users.csv δεν βρέθηκε. Η σύνδεση απέτυχε.")
-        return False, None, None
-    except Exception as e:
-        sg.popup_error("Σφάλμα:", f"Πρόβλημα ανάγνωσης του users.csv: {e}")
-        return False, None, None
-        
+
+# --- 1. Λειτουργίες Πιστοποίησης & Βάσης Δεδομένων ---
+
 def ensure_student_in_db(name, id):
     """Εισάγει τον χρήστη στον πίνακα students αν δεν υπάρχει."""
     try:
         conn = sql.connect('classroom.db')
         c = conn.cursor()
-        
-        # Ελέγχει αν υπάρχει ο χρήστης
+        c.execute('''CREATE TABLE IF NOT EXISTS students 
+                     (name TEXT, id TEXT, questions TEXT)''')
         c.execute('''SELECT name FROM students WHERE name=? AND id=?''', (name, id))
         result = c.fetchone()
-        
-        # Αν δεν υπάρχει, τον εισάγει με κενό JSON για ερωτήσεις
         if result is None:
             c.execute('''INSERT INTO students (name, id, questions) VALUES (?, ?, ?)''', (name, id, '{}'))
             conn.commit()
-            
         c.close()
         conn.close()
     except Exception as e:
-        # Αυτό το σφάλμα μπορεί να συμβεί αν ο πίνακας 'students' δεν έχει τις στήλες 'name', 'id', 'questions'
-        print(f"Database error during user check/insertion: {e}")
+        print(f"Database error: {e}")
+
+def authenticate_user(name, password):
+    """Ελέγχει τα διαπιστευτήρια του χρήστη έναντι του users.csv."""
+    try:
+        users_df = pd.read_csv('users.csv')
+        users_df.columns = users_df.columns.str.strip()
+        
+        if 'user_name' not in users_df.columns or 'user_password' not in users_df.columns or 'id' not in users_df.columns:
+            sg.popup_error("Σφάλμα:", "Το csv πρέπει να έχει στήλες: user_name, user_password, id")
+            return False, None, None
+
+        match = users_df[(users_df['user_name'].astype(str) == name) & (users_df['user_password'].astype(str) == password)]
+        
+        if not match.empty:
+            user_id = str(match['id'].iloc[0])
+            ensure_student_in_db(name, user_id)
+            return True, name, user_id
+        else:
+            return False, None, None
+    except FileNotFoundError:
+        sg.popup_error("Σφάλμα", "Δεν βρέθηκε το αρχείο users.csv")
+        return False, None, None
+    except Exception as e:
+        sg.popup_error("Σφάλμα", f"Λάθος κατά την ανάγνωση του csv: {e}")
+        return False, None, None
 
 
-# --- 2. Δημιουργία Παραθύρου Σύνδεσης (Login) ---
+# --- 2. Σχεδιασμός GUI (Layouts) ---
 
 def create_login_window():
-    sg.theme('LightBlue')
-    login_layout = [
-        [sg.Text('Σύνδεση Φοιτητή', font=('Helvetica', 20))],
+    sg.theme('DefaultNoMoreNagging') 
+    layout = [
+        [sg.Text('Σύνδεση Φοιτητή', font=('Helvetica', 20), text_color='#2C3E50')],
         [sg.HSeparator()],
-        [sg.Text('Όνομα Χρήστη:', size=(15, 1)), sg.Input(key='-NAME-', size=(30, 1))],
-        [sg.Text('Κωδικός (Password):', size=(15, 1)), sg.Input(key='-PASSWORD-', password_char='*', size=(30, 1))],
-        [sg.Text(size=(45, 1), key='-LOGIN_MESSAGE-', text_color='red')],
-        [sg.Button('Σύνδεση', key='-LOGIN_BTN-'), sg.Button('Έξοδος', key='-EXIT_LOGIN-')]
+        [sg.Text('Όνομα:', size=(10, 1)), sg.Input(key='-USER-', size=(25, 1))],
+        [sg.Text('Κωδικός:', size=(10, 1)), sg.Input(key='-PASS-', password_char='*', size=(25, 1))],
+        [sg.Text('', key='-MSG-', text_color='red', size=(35, 1))],
+        [sg.Button('Είσοδος', key='-LOGIN-', bind_return_key=True), sg.Button('Έξοδος', key='-EXIT-')]
     ]
-    return sg.Window("Σύνδεση", login_layout, finalize=True)
-
-
-# --- 3. Δημιουργία Κεντρικού Παραθύρου (Main App) ---
+    return sg.Window('Login - Tutor Agent', layout, finalize=True)
 
 def create_main_window(user_name):
-    # --- Layouts για κάθε 'Σελίδα' ---
-    about_layout = [
-        [sg.Text(f"Σχετικά με την Εφαρμογή - Χρήστης: {user_name}", font=('Helvetica', 16, 'bold'), text_color='#1064A8')],
-        [sg.HSeparator()],
-        [sg.Text("Αυτή η εφαρμογή λειτουργεί ως το κεντρικό interface για τον Tutor Agent.", size=(60, 1))],
-        [sg.Text("Δημιουργήθηκε για το μάθημα 'Ποιότητα Λογισμικού' στο ΠΑ.ΜΑΚ.")],
-        [sg.Text("Έκδοση: 1.0.0", size=(60, 1))]
-    ]
-
+    sg.theme('DefaultNoMoreNagging')
+    
     home_layout = [
-        [sg.Text(f"Καλώς ήρθες, {user_name}!", font=('Helvetica', 20, 'bold'), text_color='#1E8449')],
+        [sg.Text(f"Καλώς ήρθες, {user_name}!", font=('Helvetica', 22, 'bold'), text_color='#27AE60')],
         [sg.HSeparator()],
-        [sg.Text("Χρησιμοποιήστε τα κουμπιά πλοήγησης αριστερά για να ξεκινήσετε:", size=(60, 1))],
-        [sg.Text("➡️ Tutor: Ξεκινήστε μια συνομιλία για την Ποιότητα Λογισμικού.")],
-        [sg.Text("➡️ Quiz: Δημιουργήστε ερωτήσεις κουίζ με βάση τις προηγούμενες συνεδρίες σας.")],
-        [sg.Text("➡️ About: Πληροφορίες για την εφαρμογή.")]
+        [sg.Text("Επιλέξτε μια λειτουργία από το μενού αριστερά:", font=('Helvetica', 12))],
+        [sg.Text("💬 Tutor: Συζήτηση για το μάθημα.")],
+        [sg.Text("❓ Quiz: Τεστ γνώσεων με βάση τη συζήτηση.")]
     ]
-
-    quiz_layout = [
-        [sg.Text("Ενότητα Κουίζ (Quiz Generator)", font=('Helvetica', 16, 'bold'), text_color='#D68910')],
-        [sg.HSeparator()],
-        [sg.Text("Ερωτήσεις κουίζ θα εμφανίζονται εδώ με βάση την τελευταία σας σύνοψη.")],
-        [sg.Multiline(default_text='[Πατήστε "Δημιουργία Νέου Κουίζ" για να ξεκινήσετε...]', size=(60, 10), key='-QUIZ_DISPLAY-', disabled=True)],
-        [sg.Button("Δημιουργία Νέου Κουίζ", key='-GENERATE_QUIZ_BTN-'), sg.Button("Υποβολή Απαντήσεων", key='-SUBMIT_QUIZ_BTN-')]
-    ]
-
+    
     tutor_layout = [
-        [sg.Text("Εικονικός Καθηγητής (Tutor Chat)", font=('Helvetica', 16, 'bold'), text_color='#2E86C1')],
-        [sg.HSeparator()],
-        [sg.Multiline(default_text=f'[Συνομιλία με τον Tutor Bot...]', size=(60, 15), key='-CHAT_HISTORY-', disabled=True, autoscroll=True)],
-        [sg.Input(key='-CHAT_INPUT-', size=(50, 1)), sg.Button("Αποστολή", key='-SEND_CHAT_BTN-'), sg.Button("Τέλος Συνεδρίας", key='-END_SESSION_BTN-')]
+        [sg.Text("Tutor Chat", font=('Helvetica', 18, 'bold'), text_color='#2980B9')],
+        [sg.Multiline(size=(60, 20), key='-CHAT_BOX-', disabled=True, autoscroll=True, font=('Courier', 10))],
+        [sg.Input(key='-CHAT_INPUT-', size=(50, 1)), sg.Button('Αποστολή', key='-SEND-', bind_return_key=True)],
+        [sg.Button('Τέλος Συνεδρίας (Upload Summary)', key='-END_SESSION-')]
+    ]
+    
+    quiz_layout = [
+        [sg.Text("Quiz Generator", font=('Helvetica', 18, 'bold'), text_color='#D35400')],
+        [sg.Text("Πατήστε το κουμπί για να δημιουργηθεί το κουίζ βάσει του ιστορικού σας.")],
+        [sg.Button("Δημιουργία Κουίζ", key='-GEN_QUIZ-')],
+        [sg.Multiline("Τα ερωτήματα θα εμφανιστούν εδώ...", size=(60, 20), key='-QUIZ_BOX-', disabled=True, font=('Courier', 10))]
+    ]
+    
+    about_layout = [
+        [sg.Text("Σχετικά", font=('Helvetica', 18, 'bold'))],
+        [sg.Text("Εφαρμογή Tutor Agent & Quiz Generator")],
+        [sg.Text("Μάθημα: Ποιότητα Λογισμικού (ΠΑΜΑΚ)")]
     ]
 
-    # --- Δομή Κεντρικού Παραθύρου ---
-    home_column = sg.Column(home_layout, key='-COL_HOME-', visible=True)
-    quiz_column = sg.Column(quiz_layout, key='-COL_QUIZ-', visible=False)
-    tutor_column = sg.Column(tutor_layout, key='-COL_TUTOR-', visible=False)
-    about_column = sg.Column(about_layout, key='-COL_ABOUT-', visible=False)
-
-    nav_sidebar = [
-        [sg.Button("🏠 Αρχική", key='-NAV_HOME-', size=(15, 2))],
-        [sg.Button("💬 Tutor", key='-NAV_TUTOR-', size=(15, 2))],
-        [sg.Button("❓ Quiz", key='-NAV_QUIZ-', size=(15, 2))],
-        [sg.Button("ℹ️ About", key='-NAV_ABOUT-', size=(15, 2))],
+    sidebar = [
+        [sg.Text("Μενού", font=('Helvetica', 14, 'bold'))],
+        [sg.Button("🏠 Αρχική", key='-NAV_HOME-', size=(12, 2))],
+        [sg.Button("💬 Tutor", key='-NAV_TUTOR-', size=(12, 2))],
+        [sg.Button("❓ Quiz", key='-NAV_QUIZ-', size=(12, 2))],
+        [sg.Button("ℹ️ About", key='-NAV_ABOUT-', size=(12, 2))],
         [sg.VPush()],
-        [sg.Button("Αποσύνδεση", key='-LOGOUT_BTN-', size=(15, 1))]
+        [sg.Button("Logout", key='-LOGOUT-', size=(12, 1))]
     ]
 
-    main_layout = [
-        [
-            sg.Column(nav_sidebar, justification='top'),
-            sg.VSeperator(),
-            sg.Column(
-                [
-                    [home_column, quiz_column, tutor_column, about_column]
-                ],
-                key='-MAIN_CONTENT_AREA-'
-            )
-        ]
-    ]
-    return sg.Window("UoM Software Quality Agent Interface", main_layout, finalize=True)
+    main_col = sg.Column([
+        [sg.Column(home_layout, key='-COL_HOME-', visible=True),
+         sg.Column(tutor_layout, key='-COL_TUTOR-', visible=False),
+         sg.Column(quiz_layout, key='-COL_QUIZ-', visible=False),
+         sg.Column(about_layout, key='-COL_ABOUT-', visible=False)]
+    ])
+
+    layout = [[sg.Column(sidebar, element_justification='c', vertical_alignment='top'), sg.VSeparator(), main_col]]
+
+    return sg.Window('UoM Tutor Interface', layout, size=(800, 600), finalize=True)
 
 
-# --- 4. Κύρια Ροή Εκτέλεσης ---
+# --- 3. Κύρια Λογική (Main Loop) ---
 
-# Εξωτερικοί Agents (χρειάζεται να γίνουν functional)
-# Υποθέτουμε ότι οι modules TutorAgent, QuizAgent είναι διαθέσιμα
-from tutor_tools import upload_to_cloud
-from questions import agent_executor as quiz_executor_agent, QUIZ_SCHEMA
-# Επειδή δεν έχω το tutor agent, θα φτιάξω ένα dummy
-# import tutor_agent # <-- Αντικαταστήστε με το δικό σας module
-# tutor_agent_executor = tutor_agent.agent_executor
-
-# --- DUMMY AGENT SETUP (Για να μην σπάσει ο κώδικας) ---
-# Επειδή το LangChain setup είναι πολύπλοκο για να ενσωματωθεί σε αυτό το αρχείο,
-# και για να κάνουμε το GUI λειτουργικό, θα χρησιμοποιήσουμε μια απλοποιημένη
-# κλήση LLM για τον Tutor Agent και θα χρησιμοποιήσουμε το `quiz_generator.py`
-# για τον Quiz Agent.
-
-# Απλοποιημένη κλήση LLM για Tutor/Quiz Agent (χωρίς AgentExecutor logic)
-from langchain_google_genai import ChatGoogleGenerativeAI
-from langchain.prompts import ChatPromptTemplate, HumanMessagePromptTemplate, SystemMessagePromptTemplate
-
-LLM = ChatGoogleGenerativeAI(
-    api_key=os.getenv("GEMINI_API_KEY"),
-    model="gemini-2.5-flash",
-    temperature=0.2,
-)
-
-TUTOR_TEMPLATE = """
-You are a tutor agent that helps students learn the course "Software Quality" at the University of Macedonia (UoM).
-Answer in Greek. Provide clear and concise explanations.
-"""
-TUTOR_PROMPT = ChatPromptTemplate.from_messages([
-    ("system", TUTOR_TEMPLATE),
-    ("human", "{question}"),
-])
-# ---------------------------------------------
-
-
-def run_login_app():
-    """Εμφανίζει το παράθυρο σύνδεσης και επιστρέφει τα διαπιστευτήρια σε περίπτωση επιτυχίας."""
-    login_window = create_login_window()
+def run_application():
+    window = create_login_window()
+    user_name = None
+    user_id = None
     
-    while True:
-        event, values = login_window.read()
-        
-        if event == sg.WIN_CLOSED or event == '-EXIT_LOGIN-':
-            login_window.close()
-            return False, None, None
-            
-        if event == '-LOGIN_BTN-':
-            name = values['-NAME-'].strip()
-            password = values['-PASSWORD-']
-            
-            authenticated, user_name, user_id = authenticate_user(name, password)
-            
-            if authenticated:
-                login_window.close()
-                return True, user_name, user_id
-            else:
-                login_window['-LOGIN_MESSAGE-'].update('Σφάλμα: Λάθος όνομα χρήστη ή κωδικός.', text_color='red')
-
-def run_main_app(user_name, user_id):
-    """Εκτελεί το κύριο παράθυρο της εφαρμογής."""
-    window = create_main_window(user_name)
-    current_page = '-COL_HOME-'
-    chat_history = []
-    
-    # 5. Λειτουργία για την αλλαγή σελίδας
-    def switch_page(new_key):
-        nonlocal current_page
-        if new_key == current_page: return
-        
-        window[current_page].update(visible=False)
-        window[new_key].update(visible=True)
-        current_page = new_key
-
-    # 6. Βρόχος Γεγονότων Κυρίου Παραθύρου
     while True:
         event, values = window.read()
-
-        if event == sg.WIN_CLOSED or event == '-LOGOUT_BTN-':
-            # Εάν η συνομιλία δεν έχει κλείσει, κάνε upload τη σύνοψη
-            if chat_history:
-                # Προσομοίωση αποστολής σήματος για τερματισμό & upload
-                # (Στην πραγματικότητα, αυτό θα γινόταν με ένα prompt στον Tutor Agent)
-                sg.popup_ok("Αποσύνδεση", "Η σύνοψη της συνεδρίας ανέβηκε στο cloud.")
-
-            break
+        if event in (sg.WIN_CLOSED, '-EXIT-'):
+            window.close()
+            return
         
-        # Λογική Πλοήγησης
-        if event.startswith('-NAV_'):
-            switch_page('-COL_' + event.split('_')[1] + '-')
-
-        # 7. Λογική για τον Tutor (Chat)
-        elif event == '-SEND_CHAT_BTN-' and values['-CHAT_INPUT-']:
-            user_message = values['-CHAT_INPUT-'].strip()
-            if not user_message: continue
-
-            # Εμφάνιση μηνύματος χρήστη
-            chat_output = window['-CHAT_HISTORY-'].get()
-            chat_output += f"You: {user_message}\n"
-            window['-CHAT_HISTORY-'].update(chat_output)
-            window['-CHAT_INPUT-'].update('', focus=True)
-
-            # Κλήση στον Tutor Agent (Χρήση απλού LLM για ταχύτητα)
-            # Στην πραγματική εφαρμογή, θα χρησιμοποιούσατε τον Tutor AgentExecutor
-            try:
-                # Δημιουργία αλυσίδας (chain) για την απάντηση
-                chain = TUTOR_PROMPT | LLM
-                response_text = chain.invoke({"question": user_message}).content
-                
-                # Προσθήκη στην ιστορία συνομιλίας
-                chat_history.append({"role": "user", "content": user_message})
-                chat_history.append({"role": "ai", "content": response_text})
-
-                chat_output += f"Tutor: {response_text}\n"
-                window['-CHAT_HISTORY-'].update(chat_output)
-
-            except Exception as e:
-                error_msg = f"Tutor Error: Cannot connect to AI. {e}"
-                chat_output += f"Tutor: {error_msg}\n"
-                window['-CHAT_HISTORY-'].update(chat_output)
-        
-        elif event == '-END_SESSION_BTN-':
-            # Προσομοίωση: Κάνε upload τη σύνοψη (στην πραγματικότητα, ο Tutor Agent το κάνει)
-            if chat_history:
-                # Εδώ θα κάνατε invoke τον Tutor Agent με το "Τελος" prompt
-                # και αυτός θα καλούσε το upload_to_cloud.
-                sg.popup_ok("Τέλος Συνεδρίας", "Η σύνοψη της συνεδρίας ανέβηκε στο cloud.")
-                chat_history = [] # Επαναφορά ιστορικού
-                window['-CHAT_HISTORY-'].update("[Νέα συνεδρία ξεκίνησε...]")
+        if event == '-LOGIN-':
+            success, name, uid = authenticate_user(values['-USER-'], values['-PASS-'])
+            if success:
+                user_name = name
+                user_id = uid
+                window.close()
+                break
             else:
-                sg.popup_ok("Προσοχή", "Δεν υπάρχει ενεργή συνομιλία για σύνοψη.")
+                window['-MSG-'].update("Λάθος στοιχεία ή ανύπαρκτος χρήστης.")
 
-        # 8. Λογική για το Quiz
-        elif event == '-GENERATE_QUIZ_BTN-':
-            # Κλήση στον Quiz Agent
-            try:
-                # Η συνάρτηση main() του quiz_generator.py επιστρέφει το JSON των ερωτήσεων
-                from quiz_generator import main as generate_quiz
-                questions_json = generate_quiz(user_name, user_id)
-                
-                if questions_json:
-                    quiz_text = "Νέο Κουίζ: Μετρικές Ποιότητας Λογισμικού\n\n"
-                    for i, q in enumerate(questions_json):
-                        quiz_text += f"{i+1}. {q['question_text']}\n"
-                        # Εμφάνιση επιλογών (π.χ. Α, Β, Γ, Δ)
-                        for j, option in enumerate(q['options']):
-                             quiz_text += f"   {chr(65 + j)}: {option}\n" 
-                        quiz_text += "\n"
-                    window['-QUIZ_DISPLAY-'].update(quiz_text)
-                else:
-                    window['-QUIZ_DISPLAY-'].update("Αδυναμία δημιουργίας κουίζ. Ελέγξτε το server log.")
-                    
-            except Exception as e:
-                sg.popup_error("Σφάλμα Quiz:", f"Αδυναμία κλήσης Quiz Agent. Βεβαιωθείτε ότι το 'quiz_generator.py' λειτουργεί. Error: {e}")
-                window['-QUIZ_DISPLAY-'].update(f"Error: {e}")
+    window = create_main_window(user_name)
+    current_page = '-COL_HOME-'
+    chat_history_text = ""
+    from langchain.schema import HumanMessage, AIMessage
+    chat_history = []
+    chat_history.append(HumanMessage(content=f"Το ονομα μου ειναι {user_name}\nΟ αριθμος μητρου μου ειναι: {user_id}\nΠροηγουμενες ερωτησεις μου ειναι: "))
+    chat_history.append(AIMessage(content=""))
+    while True:
+        event, values = window.read()
         
-        elif event == '-SUBMIT_QUIZ_BTN-':
-            sg.popup("Υποβολή Κουίζ", "Οι απαντήσεις σας υποβλήθηκαν! (Απαιτείται πρόσθετος κώδικας για την αξιολόγηση)")
+        
+        if event in (sg.WIN_CLOSED, '-LOGOUT-'):
+            break
+            
+        # --- NAVIGATION LOGIC ---
+        if event.startswith('-NAV_'):
+            target = event.replace('NAV', 'COL')
+            
+            if target != current_page:
+                window[current_page].update(visible=False)
+                window[target].update(visible=True)
+                current_page = target
+        
+        if event == '-SEND-':
+            user_input = values['-CHAT_INPUT-'].strip()
+            if user_input:
+                chat_history_text += f"You: {user_input}\n"
+                window['-CHAT_BOX-'].update(chat_history_text)
+                window['-CHAT_INPUT-'].update('')
+                from tutor import generate_tutor_response,create_agent_executor
+                flag = create_agent_executor()
+                if flag:
+                    try:
+                        response = generate_tutor_response(user_input, chat_history=chat_history)
+                        ai_msg = response
+                        chat_history_text += f"Tutor: {ai_msg}\n\n"
+                        window['-CHAT_BOX-'].update(chat_history_text)
+                        chat_history.append(HumanMessage(content=user_input))
+                        chat_history.append(AIMessage(content=ai_msg))
+                    except Exception as e:
+                        chat_history_text += f"System Error: {str(e)}\n"
+                        window['-CHAT_BOX-'].update(chat_history_text)
+                else:
+                    chat_history_text += "System: Το AI δεν είναι συνδεδεμένο.\n"
+                    window['-CHAT_BOX-'].update(chat_history_text)
+        
+        if event == '-END_SESSION-':
+            sg.popup("Ενημέρωση", "Η συνεδρία ολοκληρώθηκε και η σύνοψη αποθηκεύτηκε.")
+            chat_history_text = ""
+            window['-CHAT_BOX-'].update("Ξεκινήστε νέα συζήτηση...")
+            from tutor import create_agent_executor
+            question="Τελος"
+            generate_tutor_response(question=question, chat_history=chat_history)
 
+        if event == '-GEN_QUIZ-':
+            if generate_quiz:
+                try:
+                    window['-QUIZ_BOX-'].update("Γίνεται ανάλυση ιστορικού και δημιουργία ερωτήσεων...\nΠαρακαλώ περιμένετε.")
+                    window.refresh()
+                    
+                    questions = generate_quiz(user_name, user_id)
+                    
+                    if questions:
+                        display_text = f"ΚΟΥΙΖ ΓΙΑ ΤΟΝ ΦΟΙΤΗΤΗ: {user_name}\n{'='*40}\n\n"
+                        for idx, q in enumerate(questions, 1):
+                            display_text += f"{idx}. {q['question_text']}\n"
+                            for opt_idx, option in enumerate(q['options']):
+                                letter = chr(65 + opt_idx)
+                                display_text += f"   {letter}. {option}\n"
+                            display_text += "\n"
+                        window['-QUIZ_BOX-'].update(display_text)
+                    else:
+                        window['-QUIZ_BOX-'].update("Δεν βρέθηκαν δεδομένα για δημιουργία κουίζ.")
+                except Exception as e:
+                     window['-QUIZ_BOX-'].update(f"Σφάλμα κατά τη δημιουργία κουίζ: {e}")
+            else:
+                 window['-QUIZ_BOX-'].update("Το αρχείο questions.py λείπει.")
 
     window.close()
 
-
-if __name__ == '__main__':
-    # 1. Εκτέλεση Login
-    success, name, id = run_login_app()
-    
-    # 2. Αν επιτυχής, εκτέλεση Main App
-    if success:
-        run_main_app(name, id)
+if __name__ == "__main__":
+    run_application()
