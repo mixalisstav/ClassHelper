@@ -1,28 +1,15 @@
-"""
-vector.py
-------------------------------------
-Builds a Chroma vector store from your lecture PDFs/PPTXs using Ollama embeddings.
-Includes a loading bar for progress visualization.
-"""
-
+# Imports and warnings.
 import warnings
 warnings.filterwarnings("ignore", category=UserWarning)
 warnings.filterwarnings("ignore", category=DeprecationWarning)
-
-
-
-
-
-
 import os
 from tqdm import tqdm
 from langchain_community.document_loaders import PyPDFLoader, UnstructuredPowerPointLoader
 from langchain.text_splitter import RecursiveCharacterTextSplitter
 from langchain_community.embeddings import OllamaEmbeddings
 from langchain_community.vectorstores import Chroma
+#--------------------------------------------------------------------------------------------
 
-
-# === CONFIGURATION ===
 DATA_DIR = "data"                 # Folder containing your lecture PDFs & PPTXs
 DB_DIR = "vector_db"              # Output folder for vector database
 EMBED_MODEL = "nomic-embed-text"  # Ollama model for embeddings
@@ -67,7 +54,6 @@ def build_vector_store():
     print(f"🧠 Generating embeddings with Ollama model: {EMBED_MODEL}")
     embeddings = OllamaEmbeddings(model=EMBED_MODEL)
 
-    # We’ll manually embed documents in a loop to show progress
     texts = [chunk.page_content for chunk in chunks]
     metadatas = [chunk.metadata for chunk in chunks]
 
@@ -85,7 +71,7 @@ def build_vector_store():
 def get_retriever(search_k: int = 5):
     """Load the existing Chroma vector DB and return a retriever."""
     if not os.path.exists(DB_DIR):
-        raise FileNotFoundError("❌ No vector DB found. Run 'python vector.py' first.")
+        raise FileNotFoundError("❌ No vector DB found.")
     embeddings = OllamaEmbeddings(model=EMBED_MODEL)
     db = Chroma(persist_directory=DB_DIR, embedding_function=embeddings)
     return db.as_retriever(search_type="similarity", search_kwargs={"k": search_k})
