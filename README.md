@@ -1,109 +1,119 @@
-🎓 UoM Tutor Agent & Quiz Generator
-An AI-powered educational assistant designed for the "Software Quality" course at the University of Macedonia (UoM/ΠΑΜΑΚ).
+<div align="center">
 
-This application provides a personalized learning interface where students can chat with an AI Tutor about course materials and generate dynamic quizzes based on their learning session history.
+## 🎓 UoM Tutor Agent & Quiz Generator
 
-🚀 Key Features
-User Authentication: Secure login system verifying credentials against a local registry.
+**An AI-powered study buddy** for the *Software Quality* course at the University of Macedonia (UoM/ΠΑΜΑΚ).  
+Chat with an AI Tutor, learn from course docs (RAG), then generate quizzes from your session history. ✨
 
-AI Tutor Chat: Interactive chat interface using Google Gemini and LangChain.
+![Python](https://img.shields.io/badge/Python-3.x-3776AB?logo=python&logoColor=white)
+![Desktop App](https://img.shields.io/badge/Desktop%20App-FreeSimpleGUI-6C5CE7)
+![LangChain](https://img.shields.io/badge/LangChain-powered-1C3C3C)
+![Gemini](https://img.shields.io/badge/Google%20Gemini-LLM-4285F4?logo=google&logoColor=white)
+![SQLite](https://img.shields.io/badge/SQLite-local%20db-003B57?logo=sqlite&logoColor=white)
 
-Uses RAG (Retrieval-Augmented Generation) to answer questions based on course documents.
+</div>
 
-Maintains conversation history.
+---
 
-Dynamic Quiz Generator: Automatically generates multiple-choice questions (in Greek) based on the summary of the user's chat session.
+## ✨ What it does
 
-Interactive GUI: Built with FreeSimpleGUI for a clean, user-friendly desktop experience.
+- **🔐 User login**: Verifies credentials from a local registry (`users.csv`).
+- **💬 AI Tutor chat**: Conversational tutor powered by **LangChain + Google Gemini**.
+  - **📚 RAG**: Answers questions grounded in course documents.
+  - **🧠 Memory**: Keeps conversation history during your session.
+- **❓ Quiz generator (Greek)**: Creates multiple-choice questions from your saved session summary.
+- **📈 Progress tracking**: Saves student profiles + session summaries in a local SQLite DB (`classroom.db`).
+- **☁️ Sync-ready**: Includes utilities for uploading session summaries for later reference.
 
-Progress Tracking: Uses a local SQLite database (classroom.db) to store student profiles and session summaries.
+---
 
-Cloud/Local Sync: Capabilities to upload session summaries for future reference.
+## 🧰 Tech stack
 
-🛠️ Tech Stack
-Language: Python 3.x
+- **Language**: Python 3.x
+- **GUI**: FreeSimpleGUI
+- **LLM**: LangChain + Google Gemini (`langchain-google-genai`)
+- **Vector DB / RAG**: ChromaDB + Unstructured
+- **Data**: pandas + SQLite (built-in)
+- **Packaging**: PyInstaller
 
-GUI: FreeSimpleGUI
+---
 
-AI & LLM: LangChain, Google Gemini (via langchain-google-genai)
+## 🗂️ Project layout (high level)
 
-Data Handling: Pandas, SQLite3
+```text
+.
+├── interface.py        # GUI + user login + navigation
+├── tutor.py            # Tutor/chat logic
+├── questions.py        # Quiz generation logic (JSON-style quiz output)
+├── tutor_tools.py      # LangChain tools (RAG retrieval, uploads, etc.)
+├── cloud.py            # DB / initialization helpers
+├── users.csv           # Local user registry (username/password/id)
+├── requirements.txt    # Python dependencies
+└── .env                # API keys (local only; do not commit)
+```
 
-Environment: Python-dotenv
+---
 
-Packaging: PyInstaller (Spec file included for macOS/Windows builds)
+## ⚙️ Setup (local)
 
-📂 Project Structure
-Plaintext
+### 1) Install dependencies
 
-├── interface.py       # Main entry point. Handles the GUI and User Login.
-├── questions.py       # AI Logic for generating JSON-formatted quizzes.
-├── tutor_tools.py     # LangChain tools (Database upload, RAG retrieval).
-├── users.csv          # Local user registry (Username/Password/ID).
-├── UoM_Tutor.spec     # PyInstaller configuration for building the executable.
-├── cloud.py           # Database helper scripts for initialization.
-└── .env               # API Keys (Not included in repo).
-⚙️ Installation & Setup
-1. Clone the Repository
-Bash
+```bash
+python -m venv .venv
+source .venv/bin/activate
+pip install -r requirements.txt
+```
 
-git clone https://github.com/your-username/uom-tutor-agent.git
-cd uom-tutor-agent
-2. Install Dependencies
-Ensure you have Python installed. It is recommended to use a virtual environment.
+### 2) Add your API key
 
-Bash
+Create a `.env` file in the project root:
 
-# Install required libraries (Example)
-pip install FreeSimpleGUI pandas python-dotenv langchain langchain-google-genai sqlite3
-3. Configure Environment Variables
-Create a .env file in the root directory and add your Google Gemini API key:
-
-Ini, TOML
-
+```bash
 GEMINI_API_KEY=your_google_api_key_here
-4. Database Setup
-The application automatically handles the creation of the SQLite database (classroom.db) in the user's home directory. However, ensure users.csv is present in the root folder for authentication.
+```
 
-🖥️ Usage
-Running the Application
-To start the interface, run the following command:
+### 3) Run the app
 
-Bash
-
+```bash
 python interface.py
-User Login
-Use the credentials found in users.csv to log in.
+```
 
-Example User: maria
+---
 
-Password: securepwd
+## 🧭 How to use (quick tour)
 
-Navigation
-🏠 Home: Welcome screen.
+- **🏠 Home**: Welcome screen
+- **💬 Tutor**: Chat about *Software Quality*. When you’re done, click **"Τέλος Συνεδρίας"** (End Session) to save a summary.
+- **❓ Quiz**: After you save a session, generate a quiz to test your knowledge.
+- **ℹ️ About**: Project info
 
-💬 Tutor: Chat with the AI regarding "Software Quality". When finished, click "Τέλος Συνεδρίας" (End Session) to save your summary.
+---
 
-❓ Quiz: After a session is saved, generate a quiz to test your knowledge.
+## 📦 Build an executable (optional)
 
-ℹ️ About: Information about the tool.
+If you’re packaging the app, use PyInstaller:
 
-📦 Building an Executable
-The repository includes a UoM_Tutor.spec file. You can bundle the application into a standalone executable (.exe or .app) using PyInstaller:
-
-Bash
-
+```bash
 pyinstaller UoM_Tutor.spec
-The output will be located in the dist/ folder.
+```
 
-⚠️ Important Notes
-Language: The application interface and AI responses are primarily in Greek.
+The output will appear in `dist/`.
 
-Data Privacy: The classroom.db database is stored locally in the user's home directory (e.g., C:\Users\Name\classroom.db or /Users/Name/classroom.db).
+---
 
-Missing Files: Ensure tutor.py (referenced in imports) is present in your local directory for the Chat Agent to function correctly.
+## 🔎 Notes & gotchas
 
-📜 License
-This project is created for educational purposes at the University of Macedonia.
+- **🇬🇷 Language**: UI + responses are primarily in Greek.
+- **🗄️ Data privacy**: `classroom.db` is stored locally in the user’s home directory (e.g. `~/classroom.db` on macOS/Linux, or `C:\Users\Name\classroom.db` on Windows).
+- **🔑 Secrets**: Keep `.env` private—never commit API keys.
 
-Author: [Your Name] Contact: [Your Email/Link]
+---
+
+## 📜 License
+
+Created for educational purposes at the University of Macedonia.
+
+## 🙌 Author
+
+- **Name**: _Your Name_
+- **Contact**: _your@email.com_
