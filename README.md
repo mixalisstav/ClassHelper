@@ -111,9 +111,9 @@ The output will appear in `dist/`.
 
 ## 📜 License
 
-Created for educational purposes at the University of Macedonia.
+Created for practice at the University of Macedonia.
 
 ## 🙌 Author
 
-- **Name**: _Your Name_
-- **Contact**: _your@email.com_
+- **Name**: Michael Tsampikos Stavrianakis
+- **Contact**: mstavrianakes@gmail.com
